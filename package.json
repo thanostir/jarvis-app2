@@ -1,0 +1,27 @@
+{
+  "name": "jarvis-ai",
+  "version": "2.0.0",
+  "description": "JARVIS AI Assistant",
+  "main": "src/main.js",
+  "author": "Stark Industries",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.stark.jarvis",
+    "productName": "JARVIS",
+    "directories": { "output": "dist" },
+    "win": { "target": "nsis" },
+    "nsis": {
+      "oneClick": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "JARVIS"
+    }
+  }
+}
