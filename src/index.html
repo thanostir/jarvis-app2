@@ -360,7 +360,14 @@ let history = [], recognition = null;
 const synth = window.speechSynthesis;
 let femaleVoice = null;
 let customAudio = null;
-const WAKE = ['hey jarvis','jarvis','wake up jarvis','jarvis wake up'];
+// Very broad wake detection - catches accents, mishearing, partials
+const WAKE = [
+  'hey jarvis','jarvis','hey j','jar vis','jardis','jarves',
+  'wake up jarvis','jarvis wake up','hey jarv','jarvis wake',
+  'hey gervis','gervis','hey jarvis wake','jarvis please',
+  'hey chavis','chavis','hey travis','ok jarvis','okay jarvis',
+  'jarvis are you there','jarvis come online','activate jarvis'
+];
 
 // ── Init ──────────────────────────────────────────────────
 window.onload = async () => {
@@ -638,36 +645,40 @@ function startMic() {
   recognition.continuous = true;
   recognition.interimResults = true;
   recognition.lang = 'en-US';
-
-  // Apply mic device constraint if selected
-  if (settings.micDeviceId && settings.micDeviceId !== 'default') {
-    navigator.mediaDevices.getUserMedia({
-      audio: { deviceId: { exact: settings.micDeviceId } }
-    }).catch(() => {});
-  }
+  recognition.maxAlternatives = 5;
 
   recognition.onresult = e => {
     if (speaking) return;
-    const latest = e.results[e.results.length - 1];
-    const txt = latest[0].transcript.trim().toLowerCase();
-    const conf = latest[0].confidence;
-    const threshold = (100 - settings.micSensitivity) / 100 * 0.5;
-    if (conf < threshold && conf > 0) return;
 
+    const results = Array.from(e.results);
+    const latest = results[results.length - 1];
+
+    // Collect ALL alternatives from ALL results for wake detection
+    let allTexts = [];
+    for (let i = 0; i < latest.length; i++) {
+      allTexts.push(latest[i].transcript.trim().toLowerCase());
+    }
+    const txt = allTexts[0];
+
+    // Show live transcript
     $('transcript').textContent = txt ? `"${txt}"` : '';
+
+    // Check wake word in interim results too (faster response)
+    const isWake = allTexts.some(t => WAKE.some(p => t.includes(p)));
+
+    if (!awake && isWake) {
+      awake = true;
+      $('transcript').textContent = '';
+      $('hint').style.display = 'none';
+      log('s', 'JARVIS ACTIVATED');
+      speak("Online, sir. What's on your mind?", () => { awake = true; });
+      return;
+    }
+
     if (!latest.isFinal) return;
     $('transcript').textContent = '';
 
-    const isWake = WAKE.some(p => txt.includes(p));
-
-    if (!awake) {
-      if (isWake) {
-        awake = true;
-        $('hint').style.display = 'none';
-        log('s', 'JARVIS ACTIVATED');
-        speak("Online, sir. What's on your mind?", () => { awake = true; });
-      }
-    } else {
+    if (awake) {
       let inp = txt;
       WAKE.forEach(p => { inp = inp.replace(p,'').trim(); });
       if (inp.length > 0) { awake = false; askAI(inp); }
@@ -675,15 +686,28 @@ function startMic() {
   };
 
   recognition.onerror = e => {
-    if (e.error === 'not-allowed') showErr('Microphone denied. Allow mic access in Windows settings.');
+    if (e.error === 'not-allowed') {
+      showErr('Microphone denied. Allow mic access in Windows settings.');
+    } else if (e.error === 'network') {
+      showErr('Network error. Check internet connection.');
+    }
   };
 
   recognition.onend = () => {
-    setTimeout(() => { try { recognition.start(); } catch{} }, 300);
+    // Always restart unless app is closing
+    setTimeout(() => {
+      try { recognition.start(); }
+      catch(e) {
+        setTimeout(() => { try { recognition.start(); } catch{} }, 1000);
+      }
+    }, 200);
   };
 
-  try { recognition.start(); setUIState('sleep'); log('s','MICROPHONE ACTIVE'); }
-  catch(e) { showErr(e.message); }
+  try {
+    recognition.start();
+    setUIState('sleep');
+    log('s','MICROPHONE ACTIVE — SAY HEY JARVIS');
+  } catch(e) { showErr(e.message); }
 }
 
 // ── Helpers ───────────────────────────────────────────────
