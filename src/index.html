@@ -687,26 +687,25 @@ function startMic() {
 
   recognition.onerror = e => {
     if (e.error === 'not-allowed') {
-      showErr('Microphone denied. Allow mic access in Windows settings.');
-    } else if (e.error === 'network') {
-      showErr('Network error. Check internet connection.');
+      showErr('Microphone denied. Go to Windows Settings > Privacy > Microphone > Allow.');
     }
+    // All other errors silently restart
   };
 
   recognition.onend = () => {
-    // Always restart unless app is closing
     setTimeout(() => {
-      try { recognition.start(); }
-      catch(e) {
-        setTimeout(() => { try { recognition.start(); } catch{} }, 1000);
+      try {
+        recognition.start();
+      } catch(e) {
+        setTimeout(() => startMic(), 1500);
       }
-    }, 200);
+    }, 400);
   };
 
   try {
     recognition.start();
     setUIState('sleep');
-    log('s','MICROPHONE ACTIVE — SAY HEY JARVIS');
+    log('s','MICROPHONE ACTIVE - SAY HEY JARVIS'); $('err').style.display='none';
   } catch(e) { showErr(e.message); }
 }
 
