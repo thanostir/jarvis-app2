@@ -247,6 +247,22 @@ option { background:#010a12; color:#00d4ff; }
     <div class="ai-badge" id="ai-badge">POWERED BY GEMINI</div>
     <div class="log" id="log"></div>
 
+    <!-- Fallback text input -->
+    <div style="display:flex;gap:8px;width:100%;flex-shrink:0;margin-top:4px;">
+      <input id="text-input" type="text"
+        placeholder="Or type here and press Enter..."
+        style="flex:1;background:rgba(0,212,255,0.05);border:1px solid var(--c3);border-radius:6px;
+               padding:8px 12px;color:var(--c);font-family:'Courier New',monospace;font-size:11px;
+               outline:none;letter-spacing:1px;"
+        onkeydown="if(event.key==='Enter'&&this.value.trim()){awake=false;askAI(this.value.trim());this.value='';}"
+      />
+      <button onclick="if($('text-input').value.trim()){awake=false;askAI($('text-input').value.trim());$('text-input').value='';}"
+        style="padding:8px 14px;background:var(--c2);border:1px solid var(--c3);border-radius:6px;
+               color:var(--c);font-family:'Courier New',monospace;font-size:10px;letter-spacing:2px;cursor:pointer;">
+        ASK
+      </button>
+    </div>
+
   </div>
 
   <!-- ── SETTINGS PAGE ── -->
@@ -637,6 +653,41 @@ async function askAI(input) {
 }
 
 // ── Mic ───────────────────────────────────────────────────
+// ── Windows Native Speech (via PowerShell) ───────────────
+function initWindowsSpeech() {
+  ipc('start-windows-speech');
+  ipcRenderer.on('speech-result', (event, text) => {
+    if (speaking) return;
+    text = text.trim().toLowerCase();
+    if (!text) return;
+
+    $('transcript').textContent = '"' + text + '"';
+
+    const isWake = WAKE.some(p => text.includes(p));
+
+    if (!awake && isWake) {
+      awake = true;
+      $('transcript').textContent = '';
+      $('hint').style.display = 'none';
+      log('s', 'JARVIS ACTIVATED');
+      speak("Online, sir. What's on your mind?", () => { awake = true; });
+      return;
+    }
+
+    if (awake) {
+      let inp = text;
+      WAKE.forEach(p => { inp = inp.replace(p, '').trim(); });
+      if (inp.length > 0) {
+        $('transcript').textContent = '';
+        awake = false;
+        askAI(inp);
+      }
+    }
+  });
+  setUIState('sleep');
+  log('s', 'WINDOWS SPEECH ENGINE ACTIVE - SAY HEY JARVIS');
+}
+
 function startMic() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { showErr('Speech recognition not available in this browser engine.'); return; }
