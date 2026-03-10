@@ -2,6 +2,9 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, shell, dialog, nativeImage } = 
 const path = require('path');
 const https = require('https');
 const fs = require('fs');
+const { spawn, exec } = require('child_process');
+
+let speechProcess = null;
 
 let mainWindow, tray;
 
@@ -29,7 +32,11 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 500, height: 800,
     resizable: false, frame: false, transparent: true,
-    webPreferences: { nodeIntegration: true, contextIsolation: false },
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+      webSecurity: false
+    },
     title: 'J.A.R.V.I.S.'
   });
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
@@ -180,5 +187,63 @@ Rules:
   });
 }
 
+// Required for speech recognition
+app.commandLine.appendSwitch('enable-speech-dispatcher');
+app.commandLine.appendSwitch('enable-features', 'WebSpeechAPI,AudioServiceOutOfProcess');
+app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
+
+// ── Windows Speech Recognition via PowerShell ────────────
+function startWindowsSpeech() {
+  const psScript = `
+Add-Type -AssemblyName System.Speech
+$recognizer = New-Object System.Speech.Recognition.SpeechRecognitionEngine
+$recognizer.SetInputToDefaultAudioDevice()
+$grammar = New-Object System.Speech.Recognition.DictationGrammar
+$recognizer.LoadGrammar($grammar)
+$recognizer.BabbleTimeout = [TimeSpan]::FromSeconds(3)
+$recognizer.InitialSilenceTimeout = [TimeSpan]::FromSeconds(5)
+while($true) {
+    $result = $recognizer.Recognize([TimeSpan]::FromSeconds(10))
+    if ($result -ne $null) {
+        Write-Output $result.Text
+        [Console]::Out.Flush()
+    }
+}
+`;
+
+  const psPath = path.join(app.getPath('temp'), 'jarvis_speech.ps1');
+  fs.writeFileSync(psPath, psScript);
+
+  speechProcess = spawn('powershell', [
+    '-ExecutionPolicy', 'Bypass',
+    '-NonInteractive',
+    '-File', psPath
+  ]);
+
+  speechProcess.stdout.on('data', (data) => {
+    const text = data.toString().trim().toLowerCase();
+    if (text && mainWindow) {
+      mainWindow.webContents.send('speech-result', text);
+    }
+  });
+
+  speechProcess.stderr.on('data', () => {});
+
+  speechProcess.on('close', () => {
+    // Restart after 2 seconds
+    setTimeout(() => {
+      if (mainWindow) startWindowsSpeech();
+    }, 2000);
+  });
+}
+
+ipcMain.handle('start-windows-speech', () => {
+  startWindowsSpeech();
+  return true;
+});
+
 app.whenReady().then(() => { createWindow(); createTray(); });
 app.on('window-all-closed', (e) => e.preventDefault());
+app.on('before-quit', () => {
+  if (speechProcess) speechProcess.kill();
+});
