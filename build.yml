@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>J.A.R.V.I.S.</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { width:500px; height:800px; background:transparent; font-family:'Courier New',monospace; user-select:none; overflow:hidden; }
+
+/* ── Themes ── */
+:root {
+  --bg: rgba(1,10,18,0.97);
+  --c: #00d4ff;
+  --c2: rgba(0,212,255,0.15);
+  --c3: rgba(0,212,255,0.3);
+  --text: #b8eaf5;
+  --user: #ff8c00;
+  --speak: #00ff88;
+  --think: #ff8c00;
+}
+.theme-red    { --c:#ff3a3a; --c2:rgba(255,58,58,0.15); --c3:rgba(255,58,58,0.3); --text:#ffb8b8; --user:#ff8c00; --speak:#ff3a3a; }
+.theme-green  { --c:#00ff88; --c2:rgba(0,255,136,0.15); --c3:rgba(0,255,136,0.3); --text:#b8ffd8; --user:#ffcc00; --speak:#00ff88; }
+.theme-light  { --bg:rgba(240,248,255,0.97); --c:#0066cc; --c2:rgba(0,102,204,0.1); --c3:rgba(0,102,204,0.3); --text:#003366; --user:#cc6600; --speak:#006600; }
+
+.app {
+  width:500px; height:800px;
+  background:var(--bg);
+  border:1px solid var(--c3);
+  border-radius:20px;
+  display:flex; flex-direction:column;
+  position:relative; overflow:hidden;
+  transition: all 0.4s;
+}
+.app::before {
+  content:''; position:absolute; inset:0;
+  background-image: linear-gradient(rgba(0,212,255,0.02) 1px,transparent 1px), linear-gradient(90deg,rgba(0,212,255,0.02) 1px,transparent 1px);
+  background-size:40px 40px; border-radius:20px; pointer-events:none;
+}
+
+/* ── Titlebar ── */
+.titlebar {
+  -webkit-app-region:drag;
+  height:52px; display:flex; align-items:center; justify-content:space-between;
+  padding:0 20px; border-bottom:1px solid var(--c3); flex-shrink:0;
+}
+.tl { display:flex; align-items:center; gap:10px; }
+.dot { width:7px; height:7px; border-radius:50%; background:var(--c); animation:blink 2s infinite; }
+.appname { font-size:11px; letter-spacing:5px; color:var(--c); opacity:0.8; }
+.tr { -webkit-app-region:no-drag; display:flex; gap:8px; align-items:center; }
+.cbtn {
+  width:30px; height:30px; border-radius:50%;
+  border:1px solid var(--c3); background:transparent;
+  color:var(--c); opacity:0.6; cursor:pointer; font-size:13px;
+  display:flex; align-items:center; justify-content:center; transition:all 0.2s;
+}
+.cbtn:hover { background:var(--c2); opacity:1; }
+.cbtn.quit:hover { border-color:rgba(255,60,60,0.5); color:#ff5555; }
+.cbtn.settings-btn { font-size:14px; }
+
+/* ── Pages ── */
+.page { flex:1; display:none; flex-direction:column; overflow:hidden; }
+.page.active { display:flex; }
+
+/* ── Main page ── */
+#main-page { align-items:center; padding:16px 22px 20px; gap:12px; }
+
+.reactor { position:relative; width:180px; height:180px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.ring { position:absolute; border-radius:50%; border:1px solid var(--c); transition:border-color 0.5s; }
+.r1 { width:176px; height:176px; border-top-width:2px; animation:rot 5s linear infinite; }
+.r2 { width:142px; height:142px; border-bottom-width:2px; animation:rotR 7s linear infinite; opacity:0.5; }
+.r3 { width:108px; height:108px; border-top-width:2px; animation:rot 3s linear infinite; opacity:0.35; }
+.ripple { position:absolute; width:176px; height:176px; border-radius:50%; border:1px solid var(--c); animation:rip 1.8s ease-out infinite; display:none; }
+.ripple2 { animation-delay:.7s; }
+.core {
+  width:78px; height:78px; border-radius:50%;
+  border:2px solid var(--c);
+  background:radial-gradient(circle, var(--c2) 0%, transparent 70%);
+  display:flex; align-items:center; justify-content:center;
+  animation:cpulse 2.5s ease-in-out infinite;
+  box-shadow:0 0 30px var(--c2);
+  transition:border-color 0.5s, box-shadow 0.5s;
+}
+.bars { display:none; gap:3px; align-items:center; }
+.bar { width:3px; height:20px; background:var(--speak); border-radius:2px; transform-origin:center; }
+.spinner { display:none; width:20px; height:20px; border:2px solid var(--c2); border-top-color:var(--think); border-radius:50%; animation:spin .8s linear infinite; }
+.coretxt { font-size:9px; letter-spacing:1px; color:var(--c); text-align:center; }
+
+.status { font-size:10px; letter-spacing:5px; color:var(--c); text-align:center; height:16px; flex-shrink:0; transition:color 0.3s; }
+.transcript { font-size:13px; letter-spacing:2px; color:var(--user); text-align:center; min-height:18px; flex-shrink:0; }
+
+.response {
+  width:100%; background:var(--c2); border:1px solid var(--c3);
+  border-radius:10px; padding:12px 14px;
+  font-size:12px; line-height:1.8; color:var(--text); letter-spacing:0.3px;
+  min-height:65px; max-height:130px; overflow-y:auto; flex-shrink:0;
+}
+.response::-webkit-scrollbar { width:3px; }
+.response::-webkit-scrollbar-thumb { background:var(--c3); border-radius:2px; }
+
+.hint { font-size:10px; color:var(--c); opacity:0.25; letter-spacing:3px; text-align:center; line-height:2.2; flex-shrink:0; }
+.hint b { opacity:3; font-weight:normal; font-size:12px; }
+
+.err { width:100%; background:rgba(255,0,0,0.06); border:1px solid rgba(255,60,60,0.25); border-radius:6px; padding:10px 14px; font-size:10px; color:#ff7777; letter-spacing:1px; text-align:center; display:none; flex-shrink:0; }
+
+.log { width:100%; flex:1; background:rgba(0,0,0,0.3); border:1px solid var(--c3); opacity:0.5; border-radius:8px; padding:8px 12px; overflow-y:auto; min-height:50px; }
+.log::-webkit-scrollbar { width:3px; }
+.log::-webkit-scrollbar-thumb { background:var(--c3); border-radius:2px; }
+.ll { font-size:9px; letter-spacing:1px; line-height:2; }
+.ll.u { color:var(--user); }
+.ll.j { color:var(--c); }
+.ll.s { color:var(--c); opacity:0.4; }
+
+/* AI badge */
+.ai-badge {
+  font-size:8px; letter-spacing:3px; color:var(--c); opacity:0.4;
+  text-align:center; flex-shrink:0;
+}
+
+/* ── Settings page ── */
+#settings-page { padding:0 22px 20px; overflow-y:auto; gap:0; }
+#settings-page::-webkit-scrollbar { width:4px; }
+#settings-page::-webkit-scrollbar-thumb { background:var(--c3); border-radius:2px; }
+
+.settings-title { font-size:13px; letter-spacing:5px; color:var(--c); padding:18px 0 14px; text-align:center; border-bottom:1px solid var(--c3); margin-bottom:18px; flex-shrink:0; }
+
+.sgroup { margin-bottom:18px; }
+.sgroup-title { font-size:8px; letter-spacing:4px; color:var(--c); opacity:0.5; margin-bottom:10px; }
+
+.srow { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:10px; }
+.slabel { font-size:11px; letter-spacing:1px; color:var(--text); flex:1; }
+.slabel small { display:block; font-size:9px; color:var(--c); opacity:0.4; margin-top:2px; letter-spacing:1px; }
+
+.sinput {
+  background:var(--c2); border:1px solid var(--c3); border-radius:6px;
+  padding:8px 10px; color:var(--c); font-family:'Courier New',monospace;
+  font-size:11px; outline:none; transition:border-color 0.2s; width:220px;
+}
+.sinput:focus { border-color:var(--c); }
+.sinput::placeholder { color:var(--c); opacity:0.3; }
+.sinput.full { width:100%; }
+
+select.sinput { cursor:pointer; }
+option { background:#010a12; color:#00d4ff; }
+
+.stoggle {
+  width:44px; height:24px; border-radius:12px;
+  background:rgba(0,0,0,0.4); border:1px solid var(--c3);
+  cursor:pointer; position:relative; transition:background 0.3s; flex-shrink:0;
+}
+.stoggle.on { background:var(--c); }
+.stoggle::after {
+  content:''; position:absolute; top:3px; left:3px;
+  width:16px; height:16px; border-radius:50%; background:white;
+  transition:left 0.3s;
+}
+.stoggle.on::after { left:23px; }
+
+.srange { width:150px; accent-color:var(--c); cursor:pointer; }
+
+.sbtn {
+  padding:8px 14px; background:var(--c2); border:1px solid var(--c3);
+  border-radius:6px; color:var(--c); font-family:'Courier New',monospace;
+  font-size:10px; letter-spacing:2px; cursor:pointer; transition:all 0.2s;
+  white-space:nowrap;
+}
+.sbtn:hover { background:var(--c3); }
+.sbtn.danger { border-color:rgba(255,60,60,0.3); color:#ff6666; }
+.sbtn.danger:hover { background:rgba(255,0,0,0.1); }
+
+/* Theme swatches */
+.themes { display:flex; gap:8px; }
+.swatch {
+  width:28px; height:28px; border-radius:50%; cursor:pointer;
+  border:2px solid transparent; transition:border-color 0.2s;
+}
+.swatch.active { border-color:white; }
+.swatch.blue { background:radial-gradient(circle, #00d4ff, #003a5c); }
+.swatch.red { background:radial-gradient(circle, #ff3a3a, #5c0000); }
+.swatch.green { background:radial-gradient(circle, #00ff88, #005c2a); }
+.swatch.light { background:radial-gradient(circle, #0066cc, #e0f0ff); }
+
+.voice-path { font-size:9px; color:var(--c); opacity:0.5; letter-spacing:1px; word-break:break-all; margin-top:4px; }
+
+.save-btn {
+  width:100%; padding:13px; background:var(--c2); border:1px solid var(--c);
+  border-radius:8px; color:var(--c); font-family:'Courier New',monospace;
+  font-size:11px; letter-spacing:4px; cursor:pointer; transition:all 0.2s; margin-top:8px;
+}
+.save-btn:hover { background:var(--c3); }
+
+/* divider */
+.sdiv { border:none; border-top:1px solid var(--c3); opacity:0.3; margin:14px 0; }
+
+/* ── Animations ── */
+@keyframes rot    { to{transform:rotate(360deg)} }
+@keyframes rotR   { to{transform:rotate(-360deg)} }
+@keyframes cpulse { 0%,100%{opacity:.45;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
+@keyframes rip    { 0%{transform:scale(.85);opacity:.8} 100%{transform:scale(2.3);opacity:0} }
+@keyframes blink  { 0%,100%{opacity:1} 50%{opacity:.15} }
+@keyframes barP   { 0%,100%{transform:scaleY(.15)} 50%{transform:scaleY(1)} }
+@keyframes spin   { to{transform:rotate(360deg)} }
+</style>
+</head>
+<body>
+<div class="app theme-blue" id="app">
+
+  <!-- Titlebar -->
+  <div class="titlebar">
+    <div class="tl">
+      <div class="dot"></div>
+      <div class="appname">J.A.R.V.I.S.</div>
+    </div>
+    <div class="tr">
+      <button class="cbtn settings-btn" id="settings-toggle" title="Settings">⚙</button>
+      <button class="cbtn" onclick="ipc('minimize')" title="Hide to tray">—</button>
+      <button class="cbtn quit" onclick="ipc('quit')" title="Quit">✕</button>
+    </div>
+  </div>
+
+  <!-- ── MAIN PAGE ── -->
+  <div class="page active" id="main-page">
+
+    <div class="reactor">
+      <div class="ripple" id="rip1"></div>
+      <div class="ripple ripple2" id="rip2"></div>
+      <div class="ring r1"></div>
+      <div class="ring r2"></div>
+      <div class="ring r3"></div>
+      <div class="core" id="core">
+        <div class="bars" id="bars">
+          <div class="bar" style="animation:barP .5s 0s ease-in-out infinite"></div>
+          <div class="bar" style="animation:barP .5s .1s ease-in-out infinite"></div>
+          <div class="bar" style="animation:barP .5s .2s ease-in-out infinite"></div>
+          <div class="bar" style="animation:barP .5s .3s ease-in-out infinite"></div>
+          <div class="bar" style="animation:barP .5s .4s ease-in-out infinite"></div>
+        </div>
+        <div class="spinner" id="spinner"></div>
+        <div class="coretxt" id="coretxt">SLEEP</div>
+      </div>
+    </div>
+
+    <div class="status" id="status">SAY · HEY JARVIS</div>
+    <div class="transcript" id="transcript"></div>
+    <div class="response" id="response">Awaiting your command, sir.</div>
+    <div class="hint" id="hint">SAY <b>"HEY JARVIS"</b> TO WAKE<br><span style="font-size:9px;opacity:0.6">THEN SAY A WORD OR ASK ANYTHING</span></div>
+    <div class="err" id="err"></div>
+    <div class="ai-badge" id="ai-badge">POWERED BY GEMINI</div>
+    <div class="log" id="log"></div>
+
+    <!-- Fallback text input -->
+    <div style="display:flex;gap:8px;width:100%;flex-shrink:0;margin-top:4px;">
+      <input id="text-input" type="text"
+        placeholder="Or type here and press Enter..."
+        style="flex:1;background:rgba(0,212,255,0.05);border:1px solid var(--c3);border-radius:6px;
+               padding:8px 12px;color:var(--c);font-family:'Courier New',monospace;font-size:11px;
+               outline:none;letter-spacing:1px;"
+        onkeydown="if(event.key==='Enter'&&this.value.trim()){awake=false;askAI(this.value.trim());this.value='';}"
+      />
+      <button onclick="if($('text-input').value.trim()){awake=false;askAI($('text-input').value.trim());$('text-input').value='';}"
+        style="padding:8px 14px;background:var(--c2);border:1px solid var(--c3);border-radius:6px;
+               color:var(--c);font-family:'Courier New',monospace;font-size:10px;letter-spacing:2px;cursor:pointer;">
+        ASK
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ── SETTINGS PAGE ── -->
+  <div class="page" id="settings-page">
+    <div class="settings-title">⚙ SETTINGS</div>
+
+    <!-- AI Provider -->
+    <div class="sgroup">
+      <div class="sgroup-title">AI PROVIDER</div>
+      <div class="srow">
+        <div class="slabel">Provider<small>Which AI powers JARVIS</small></div>
+        <select class="sinput" id="s-provider">
+          <option value="gemini">Gemini (Google)</option>
+          <option value="claude">Claude (Anthropic)</option>
+        </select>
+      </div>
+      <div class="srow">
+        <div class="slabel">Gemini API Key<small>console.cloud.google.com</small></div>
+      </div>
+      <input class="sinput full" id="s-gemini-key" type="password" placeholder="AIza..."/>
+      <div style="height:8px"></div>
+      <div class="srow">
+        <div class="slabel">Claude API Key<small>console.anthropic.com</small></div>
+      </div>
+      <input class="sinput full" id="s-claude-key" type="password" placeholder="sk-ant-..."/>
+      <div style="height:6px"></div>
+      <div style="display:flex;gap:8px">
+        <button class="sbtn" onclick="openUrl('https://aistudio.google.com/app/apikey')">Get Gemini Key ↗</button>
+        <button class="sbtn" onclick="openUrl('https://console.anthropic.com')">Get Claude Key ↗</button>
+      </div>
+    </div>
+
+    <hr class="sdiv">
+
+    <!-- Voice -->
+    <div class="sgroup">
+      <div class="sgroup-title">VOICE RESPONSE</div>
+      <div class="srow">
+        <div class="slabel">Use Custom Voice<small>Upload your own audio voice</small></div>
+        <div class="stoggle" id="t-custom-voice" onclick="toggle('useCustomVoice')"></div>
+      </div>
+      <div class="srow">
+        <button class="sbtn" onclick="pickVoiceFile()">📁 Upload Voice File</button>
+        <div id="voice-filename" class="voice-path">No file selected</div>
+      </div>
+      <div class="srow">
+        <div class="slabel">System Voice<small>Pick from PC voices</small></div>
+        <select class="sinput" id="s-system-voice"></select>
+      </div>
+    </div>
+
+    <hr class="sdiv">
+
+    <!-- Microphone -->
+    <div class="sgroup">
+      <div class="sgroup-title">MICROPHONE</div>
+      <div class="srow">
+        <div class="slabel">Select Microphone<small>Which mic JARVIS listens to</small></div>
+      </div>
+      <select class="sinput full" id="s-mic-device"></select>
+      <div style="height:10px"></div>
+      <div class="srow">
+        <div class="slabel">Sensitivity<small id="sens-val">50</small></div>
+        <input class="srange" id="s-sensitivity" type="range" min="0" max="100" value="50"
+          oninput="document.getElementById('sens-val').textContent=this.value"/>
+      </div>
+    </div>
+
+    <hr class="sdiv">
+
+    <!-- Theme -->
+    <div class="sgroup">
+      <div class="sgroup-title">THEME</div>
+      <div class="srow">
+        <div class="slabel">Color Theme</div>
+        <div class="themes">
+          <div class="swatch blue active" id="sw-blue" onclick="setTheme('blue')" title="Blue"></div>
+          <div class="swatch red" id="sw-red" onclick="setTheme('red')" title="Red"></div>
+          <div class="swatch green" id="sw-green" onclick="setTheme('green')" title="Green"></div>
+          <div class="swatch light" id="sw-light" onclick="setTheme('light')" title="Light"></div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="sdiv">
+
+    <!-- Behavior -->
+    <div class="sgroup">
+      <div class="sgroup-title">BEHAVIOR</div>
+      <div class="srow">
+        <div class="slabel">Stay in Tray When Closed<small>JARVIS keeps listening in background</small></div>
+        <div class="stoggle on" id="t-stay-tray" onclick="toggle('stayInTray')"></div>
+      </div>
+    </div>
+
+    <button class="save-btn" onclick="saveSettings()">SAVE SETTINGS</button>
+    <div style="height:16px"></div>
+  </div>
+
+</div>
+
+<script>
+const { ipcRenderer } = require('electron');
+const ipc = (ch,...a) => ipcRenderer.invoke(ch,...a);
+const $ = id => document.getElementById(id);
+
+// ── State ─────────────────────────────────────────────────
+let settings = {};
+let awake = false, speaking = false;
+let history = [], recognition = null;
+const synth = window.speechSynthesis;
+let femaleVoice = null;
+let customAudio = null;
+// Very broad wake detection - catches accents, mishearing, partials
+const WAKE = [
+  'hey jarvis','jarvis','hey j','jar vis','jardis','jarves',
+  'wake up jarvis','jarvis wake up','hey jarv','jarvis wake',
+  'hey gervis','gervis','hey jarvis wake','jarvis please',
+  'hey chavis','chavis','hey travis','ok jarvis','okay jarvis',
+  'jarvis are you there','jarvis come online','activate jarvis'
+];
+
+// ── Init ──────────────────────────────────────────────────
+window.onload = async () => {
+  settings = await ipc('get-settings');
+  applySettings();
+  loadMicDevices();
+  loadSystemVoices();
+  setTimeout(() => {
+    if (hasApiKey()) {
+      startApp();
+    } else {
+      showErr('No API key set. Click ⚙ Settings to add your Gemini key.');
+      $('status').textContent = 'ADD API KEY IN SETTINGS';
+    }
+  }, 500);
+};
+
+ipcRenderer.on('settings-updated', (e, s) => {
+  settings = s;
+  applySettings();
+});
+
+function hasApiKey() {
+  if (settings.aiProvider === 'gemini') return !!settings.geminiKey;
+  return !!settings.claudeKey;
+}
+
+// ── Apply settings to UI ──────────────────────────────────
+function applySettings() {
+  // Theme
+  setThemeUI(settings.theme || 'blue');
+
+  // Provider
+  $('s-provider').value = settings.aiProvider || 'gemini';
+  $('ai-badge').textContent = `POWERED BY ${(settings.aiProvider||'gemini').toUpperCase()}`;
+
+  // Keys
+  if (settings.geminiKey) $('s-gemini-key').value = settings.geminiKey;
+  if (settings.claudeKey) $('s-claude-key').value = settings.claudeKey;
+
+  // Sensitivity
+  $('s-sensitivity').value = settings.micSensitivity || 50;
+  $('sens-val').textContent = settings.micSensitivity || 50;
+
+  // Toggles
+  setToggleUI('t-stay-tray', settings.stayInTray !== false);
+  setToggleUI('t-custom-voice', !!settings.useCustomVoice);
+
+  // Voice file
+  if (settings.customVoicePath) {
+    const name = settings.customVoicePath.split(/[\\/]/).pop();
+    $('voice-filename').textContent = name;
+  }
+}
+
+// ── Settings page toggle ──────────────────────────────────
+let onSettingsPage = false;
+$('settings-toggle').onclick = () => {
+  onSettingsPage = !onSettingsPage;
+  $('main-page').classList.toggle('active', !onSettingsPage);
+  $('settings-page').classList.toggle('active', onSettingsPage);
+  $('settings-toggle').style.opacity = onSettingsPage ? '1' : '0.6';
+  if (onSettingsPage) loadMicDevices();
+};
+
+// ── Toggles ───────────────────────────────────────────────
+function toggle(key) {
+  settings[key] = !settings[key];
+  if (key === 'stayInTray') setToggleUI('t-stay-tray', settings[key]);
+  if (key === 'useCustomVoice') setToggleUI('t-custom-voice', settings[key]);
+}
+function setToggleUI(id, val) {
+  $(id).classList.toggle('on', !!val);
+}
+
+// ── Theme ─────────────────────────────────────────────────
+function setTheme(t) {
+  settings.theme = t;
+  setThemeUI(t);
+}
+function setThemeUI(t) {
+  const app = $('app');
+  app.className = app.className.replace(/theme-\w+/g, '').trim();
+  app.classList.add(`theme-${t}`);
+  ['blue','red','green','light'].forEach(c => {
+    const sw = $(`sw-${c}`);
+    if (sw) sw.classList.toggle('active', c === t);
+  });
+}
+
+// ── Mic devices ───────────────────────────────────────────
+async function loadMicDevices() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const mics = devices.filter(d => d.kind === 'audioinput');
+    const sel = $('s-mic-device');
+    sel.innerHTML = '';
+    mics.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.deviceId;
+      opt.textContent = m.label || `Microphone ${m.deviceId.slice(0,8)}`;
+      if (m.deviceId === settings.micDeviceId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  } catch(e) { console.log('mic enum:', e); }
+}
+
+// ── System voices ─────────────────────────────────────────
+function loadSystemVoices() {
+  const load = () => {
+    const voices = synth.getVoices();
+    const sel = $('s-system-voice');
+    sel.innerHTML = '';
+    voices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.name;
+      opt.textContent = v.name + (v.lang ? ` (${v.lang})` : '');
+      if (v.name === settings.systemVoice) opt.selected = true;
+      sel.appendChild(opt);
+    });
+
+    // Auto-pick female voice
+    const femKw = ['zira','hazel','karen','samantha','victoria','moira','fiona','tessa','female'];
+    femaleVoice = voices.find(v => femKw.some(k => v.name.toLowerCase().includes(k)))
+      || voices.find(v => v.lang && v.lang.startsWith('en'))
+      || voices[0];
+  };
+  synth.onvoiceschanged = load;
+  load();
+}
+
+// ── Pick voice file ───────────────────────────────────────
+async function pickVoiceFile() {
+  const fp = await ipc('pick-voice-file');
+  if (fp) {
+    settings.customVoicePath = fp;
+    const name = fp.split(/[\\/]/).pop();
+    $('voice-filename').textContent = name;
+  }
+}
+
+// ── Save settings ─────────────────────────────────────────
+async function saveSettings() {
+  settings.aiProvider = $('s-provider').value;
+  settings.geminiKey  = $('s-gemini-key').value.trim();
+  settings.claudeKey  = $('s-claude-key').value.trim();
+  settings.micSensitivity = parseInt($('s-sensitivity').value);
+  settings.micDeviceId    = $('s-mic-device').value;
+  settings.systemVoice    = $('s-system-voice').value;
+
+  await ipc('save-settings', settings);
+
+  $('ai-badge').textContent = `POWERED BY ${settings.aiProvider.toUpperCase()}`;
+
+  // Close settings
+  onSettingsPage = false;
+  $('settings-page').classList.remove('active');
+  $('main-page').classList.add('active');
+  $('settings-toggle').style.opacity = '0.6';
+
+  $('err').style.display = 'none';
+
+  if (hasApiKey() && !recognition) {
+    startApp();
+  } else if (hasApiKey()) {
+    speak('Settings updated, sir.', () => {});
+  } else {
+    showErr('Please add an API key to activate JARVIS.');
+  }
+}
+
+function openUrl(url) { ipc('open-url', url); }
+
+// ── App start ─────────────────────────────────────────────
+function startApp() {
+  setUIState('sleep');
+  log('s', 'NEURAL LINK ESTABLISHED');
+  setTimeout(() => {
+    speak('J.A.R.V.I.S. online. All systems operational, sir.', () => startMic());
+  }, 400);
+}
+
+// ── UI States ─────────────────────────────────────────────
+function setUIState(state) {
+  $('bars').style.display    = 'none';
+  $('spinner').style.display = 'none';
+  $('coretxt').style.display = 'none';
+  $('rip1').style.display    = 'none';
+  $('rip2').style.display    = 'none';
+
+  if (state === 'sleep' || state === 'listen') {
+    $('coretxt').style.display = 'block';
+    $('coretxt').textContent = awake ? 'READY' : 'SLEEP';
+    $('status').textContent  = awake ? 'LISTENING...' : 'SAY · HEY JARVIS';
+  } else if (state === 'think') {
+    $('spinner').style.display = 'block';
+    $('rip1').style.display = $('rip2').style.display = 'block';
+    $('status').textContent = 'PROCESSING...';
+  } else if (state === 'speak') {
+    $('bars').style.display = 'flex';
+    $('rip1').style.display = $('rip2').style.display = 'block';
+    $('status').textContent = 'JARVIS SPEAKING';
+  }
+}
+
+// ── Speak ─────────────────────────────────────────────────
+function speak(text, cb) {
+  synth.cancel();
+  speaking = true;
+  setUIState('speak');
+  $('response').textContent = text;
+  log('j', text);
+
+  // Custom voice: play uploaded audio then speak text after
+  if (settings.useCustomVoice && settings.customVoicePath) {
+    try {
+      const audio = new Audio(`file://${settings.customVoicePath}`);
+      audio.onended = () => {
+        doTTS(text, cb);
+      };
+      audio.onerror = () => doTTS(text, cb);
+      audio.play();
+      return;
+    } catch { }
+  }
+  doTTS(text, cb);
+}
+
+function doTTS(text, cb) {
+  const u = new SpeechSynthesisUtterance(text);
+
+  // Use selected system voice if set
+  if (settings.systemVoice) {
+    const voices = synth.getVoices();
+    const v = voices.find(v => v.name === settings.systemVoice);
+    if (v) u.voice = v;
+  } else if (femaleVoice) {
+    u.voice = femaleVoice;
+  }
+
+  u.rate = 0.92; u.pitch = 0.82; u.volume = 1;
+  u.onend = u.onerror = () => {
+    speaking = false;
+    setUIState('listen');
+    if (cb) cb();
+  };
+  synth.speak(u);
+}
+
+// ── Ask AI ────────────────────────────────────────────────
+async function askAI(input) {
+  setUIState('think');
+  log('u', input);
+  $('transcript').textContent = '';
+  history.push({ role:'user', content:input });
+  if (history.length > 20) history = history.slice(-20);
+
+  const apiKey = settings.aiProvider === 'gemini' ? settings.geminiKey : settings.claudeKey;
+  if (!apiKey) {
+    speak('No API key configured, sir. Please check settings.', () => { awake = true; });
+    return;
+  }
+
+  const reply = await ipc('ask-ai', { messages:history, provider:settings.aiProvider, apiKey });
+  history.push({ role:'assistant', content:reply });
+  speak(reply, () => { awake = true; setUIState('listen'); });
+}
+
+// ── Mic ───────────────────────────────────────────────────
+function startMic() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showErr('Speech recognition not available in this browser engine.'); return; }
+
+  recognition = new SR();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+  recognition.maxAlternatives = 5;
+
+  recognition.onresult = e => {
+    if (speaking) return;
+
+    const results = Array.from(e.results);
+    const latest = results[results.length - 1];
+
+    // Collect ALL alternatives from ALL results for wake detection
+    let allTexts = [];
+    for (let i = 0; i < latest.length; i++) {
+      allTexts.push(latest[i].transcript.trim().toLowerCase());
+    }
+    const txt = allTexts[0];
+
+    // Show live transcript
+    $('transcript').textContent = txt ? `"${txt}"` : '';
+
+    // Check wake word in interim results too (faster response)
+    const isWake = allTexts.some(t => WAKE.some(p => t.includes(p)));
+
+    if (!awake && isWake) {
+      awake = true;
+      $('transcript').textContent = '';
+      $('hint').style.display = 'none';
+      log('s', 'JARVIS ACTIVATED');
+      speak("Online, sir. What's on your mind?", () => { awake = true; });
+      return;
+    }
+
+    if (!latest.isFinal) return;
+    $('transcript').textContent = '';
+
+    if (awake) {
+      let inp = txt;
+      WAKE.forEach(p => { inp = inp.replace(p,'').trim(); });
+      if (inp.length > 0) { awake = false; askAI(inp); }
+    }
+  };
+
+  recognition.onerror = e => {
+    if (e.error === 'not-allowed') {
+      showErr('Microphone denied. Go to Windows Settings > Privacy > Microphone > Allow.');
+    }
+    // All other errors silently restart
+  };
+
+  recognition.onend = () => {
+    setTimeout(() => {
+      try {
+        recognition.start();
+      } catch(e) {
+        setTimeout(() => startMic(), 1500);
+      }
+    }, 400);
+  };
+
+  try {
+    recognition.start();
+    setUIState('sleep');
+    log('s','MICROPHONE ACTIVE - SAY HEY JARVIS'); $('err').style.display='none';
+  } catch(e) { showErr(e.message); }
+}
+
+// ── Helpers ───────────────────────────────────────────────
+function log(type, text) {
+  const d = document.createElement('div');
+  d.className = 'll ' + type;
+  d.textContent = (type==='u'?'▶ YOU  : ':type==='s'?'  SYS  : ':'  J.A.R: ') + text;
+  $('log').appendChild(d);
+  $('log').scrollTop = 9999;
+  while ($('log').children.length > 24) $('log').removeChild($('log').firstChild);
+}
+
+function showErr(m) {
+  $('err').textContent = '⚠ ' + m;
+  $('err').style.display = 'block';
+}
+</script>
+</body>
+</html>
